@@ -85,6 +85,8 @@ struct MenuPanelView: View {
     @AppStorage(DefaultsKey.panelShowControls) private var showControls = true
     @AppStorage(DefaultsKey.panelShowToggles) private var showToggles = true
     @AppStorage(DefaultsKey.panelShowWallpaper) private var showWallpaper = true
+    // Fork customization: hidden by default, see docs/定制改动记录.md.
+    @AppStorage(DefaultsKey.panelShowBrandMark) private var showBrandMark = false
     @AppStorage(DefaultsKey.panelSectionOrder) private var sectionOrderRaw = ""
     @State private var navigableContentHeight: CGFloat = 0
     @State private var metricContentHeight: CGFloat = 0
@@ -221,8 +223,9 @@ struct MenuPanelView: View {
 
             footer
         }
-        .padding(12)
-        .frame(width: 332, height: navigablePanelHeight)
+        .padding(.horizontal, 12)
+        .padding(.vertical, panelVerticalInset)
+        .frame(width: 332, height: navigablePanelHeight, alignment: .top)
         .panelGlassSurface()
     }
 
@@ -243,8 +246,9 @@ struct MenuPanelView: View {
 
             footer
         }
-        .padding(12)
-        .frame(width: 332, height: metricPanelHeight)
+        .padding(.horizontal, 12)
+        .padding(.vertical, panelVerticalInset)
+        .frame(width: 332, height: metricPanelHeight, alignment: .top)
         .panelGlassSurface()
     }
 
@@ -276,18 +280,41 @@ struct MenuPanelView: View {
 
     private var metricScrollHeight: CGFloat {
         let measured = metricContentHeight == 0 ? estimatedMetricContentHeight : metricContentHeight
-        return min(measured, max(80, maxHeight - navigableChromeHeight))
+        return min(measured, max(80, maxHeight - metricChromeHeight))
     }
 
     private var metricPanelHeight: CGFloat {
-        min(maxHeight, max(220, metricScrollHeight + navigableChromeHeight))
+        min(maxHeight, max(220, metricScrollHeight + metricChromeHeight))
     }
 
+    /// The detail layout swaps the 38 pt section tabs for a 24 pt back/title
+    /// row, so its chrome is 14 pt shorter than the navigable layout's.
+    private var metricChromeHeight: CGFloat { navigableChromeHeight - 14 }
+
+    /// Whether the header row (brand mark and/or beta badge) is rendered.
+    private var showsHeader: Bool { showBrandMark || AppInfo.isBeta }
+
+    /// Fork customization: with the brand mark hidden, the upstream 12 pt
+    /// top/bottom inset used to read as dead space — the real cause was the
+    /// over-reserved chrome height, not the inset itself. With the exact
+    /// chrome below, 11 pt keeps the top/bottom close to the 12 pt sides
+    /// without returning to the loose look of the original build. Keep the
+    /// original inset when the header is shown.
+    private var panelVerticalInset: CGFloat { showsHeader ? 12 : 11 }
+
+    /// Non-scrolling height of both panel layouts, summed from the actual rows
+    /// instead of the upstream 180 pt estimate (which over-reserved space and
+    /// left equal blank strips above and below the centered content).
+    /// 38 pt tabs + 34 pt footer + two 12 pt VStack gaps + the vertical inset.
+    /// The header adds 36 pt plus one gap; the update banner adds its measured
+    /// height plus one gap. Empty views in the VStack take no spacing.
     private var navigableChromeHeight: CGFloat {
-        let bannerHeight = updates.state.showsMenuPanelBanner
+        let fixed: CGFloat = 38 + 34 + 24 + 2 * panelVerticalInset
+        let headerHeight: CGFloat = showsHeader ? 36 + 12 : 0
+        let bannerHeight: CGFloat = updates.state.showsMenuPanelBanner
             ? (max(updateBannerHeight, 48) + 12)
             : 0
-        return 180 + bannerHeight
+        return fixed + headerHeight + bannerHeight
     }
 
     private var estimatedNavigableContentHeight: CGFloat {
@@ -451,8 +478,14 @@ struct MenuPanelView: View {
         CleaningModeManager.shared.activate()
     }
 
+    /// The header only exists while the brand mark (or the beta badge) needs
+    /// it. Removing the whole row keeps hiding the mark from leaving a blank
+    /// strip above the tabs.
+    @ViewBuilder
     private var header: some View {
-        MenuPanelHeader()
+        if showsHeader {
+            MenuPanelHeader(showBrandMark: showBrandMark)
+        }
     }
 
     private var footer: some View {
@@ -507,12 +540,15 @@ struct MenuPanelView: View {
 private struct MenuPanelHeader: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject private var l10n = L10n.shared
+    var showBrandMark: Bool
 
     var body: some View {
         ZStack {
-            BrandMark(width: 48, tint: markTint)
-                .frame(height: 28)
-                .accessibilityHidden(true)
+            if showBrandMark {
+                BrandMark(width: 48, tint: markTint)
+                    .frame(height: 28)
+                    .accessibilityHidden(true)
+            }
 
             if AppInfo.isBeta {
                 HStack {

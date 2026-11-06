@@ -2605,6 +2605,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     /// person chose to skip it. In the Developer build `downloadAndInstall()`
     /// is a no-op, so confirming is safe.
     func showUpdatePreview() {
+        // Fork customization: no install preview in a custom build, even if a
+        // leftover preference somehow leaves a simulated "available" state.
+        if AppInfo.isCustomBuild { return }
         guard case let .available(version) = UpdateService.shared.state else { return }
         if let window = updatePreviewWindow {
             closePopover()

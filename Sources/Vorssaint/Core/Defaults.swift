@@ -368,6 +368,9 @@ enum DefaultsKey {
     static let panelControlInputExpanded = "panelControlInputExpanded"
     static let panelControlFilesExpanded = "panelControlFilesExpanded"
     // Show/hide whole panel sections that have no monitorShow* key of their own.
+    // Fork customization: the brand mark at the top of the menu bar panel.
+    // Off by default (hidden); see docs/定制改动记录.md.
+    static let panelShowBrandMark = "panelShowBrandMark"
     static let panelShowKeepAwake = "panelShowKeepAwake"
     static let panelShowBrightness = "panelShowBrightness"
     static let panelShowUtilities = "panelShowUtilities"
@@ -1217,6 +1220,8 @@ enum Defaults {
     static let allowedMonitorAlertCooldowns = [2, 5, 15, 30, 60]
 
     static let registeredDefaults: [String: Any] = [
+        // Fork customization: keep the brand mark hidden unless it is turned on.
+        DefaultsKey.panelShowBrandMark: false,
         DefaultsKey.appearance: AppAppearance.fallback.rawValue,
         DefaultsKey.liquidGlassEnabled: false,
         DefaultsKey.notchLiquidGlassEnabled: false,
@@ -1320,7 +1325,8 @@ enum Defaults {
         DefaultsKey.middleClickTapFingers: 0,
         DefaultsKey.previewSize: "normal",
         DefaultsKey.switcherPreviewSize: "normal",
-        DefaultsKey.autoCheckUpdates: true,
+        // Fork customization: custom builds default to no automatic checks.
+        DefaultsKey.autoCheckUpdates: AppInfo.defaultAutoCheckUpdates,
         DefaultsKey.includeBetaUpdates: false,
         DefaultsKey.releaseNotesOnUpdate: true,
         DefaultsKey.showReleaseNotesBeforeUpdate: true,

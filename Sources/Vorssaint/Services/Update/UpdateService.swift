@@ -38,7 +38,12 @@ final class UpdateService: ObservableObject {
     private init() {}
 
     var autoCheckEnabled: Bool {
-        get { UserDefaults.standard.object(forKey: DefaultsKey.autoCheckUpdates) as? Bool ?? true }
+        get {
+            // Fork customization: a custom build never schedules a check,
+            // whatever a leftover preference (or an imported backup) says.
+            if AppInfo.isCustomBuild { return false }
+            return UserDefaults.standard.object(forKey: DefaultsKey.autoCheckUpdates) as? Bool ?? true
+        }
         set {
             UserDefaults.standard.set(newValue, forKey: DefaultsKey.autoCheckUpdates)
             configureAutomaticChecks()
@@ -62,6 +67,9 @@ final class UpdateService: ObservableObject {
     /// Called at launch: checks shortly after start and then daily, if enabled.
     func startAutomaticChecks() {
         consumeInstallResult()
+        // Fork customization: no timer, no network request, no update banner
+        // in a custom build. Upstream releases must never overwrite this app.
+        if AppInfo.isCustomBuild { return }
         if AppInfo.isBeta && UserDefaults.standard.object(forKey: DefaultsKey.includeBetaUpdates) == nil {
             UserDefaults.standard.set(true, forKey: DefaultsKey.includeBetaUpdates)
         }
@@ -86,7 +94,7 @@ final class UpdateService: ObservableObject {
     private func configureAutomaticChecks() {
         refreshTimer?.invalidate()
         refreshTimer = nil
-        guard autoCheckEnabled else { return }
+        guard !AppInfo.isCustomBuild, autoCheckEnabled else { return }
         // Hourly (was daily). Combined with the activate / panel-open checks, a new
         // release surfaces within the hour instead of up to a day later.
         let timer = Timer(timeInterval: 60 * 60, repeats: true) { [weak self] _ in
@@ -100,6 +108,14 @@ final class UpdateService: ObservableObject {
     // MARK: - Check
 
     func check(manual: Bool) {
+        // Fork customization: even an explicit "Check now" stays offline and
+        // reports the current build as final, so no DMG is ever offered.
+        if AppInfo.isCustomBuild {
+            state = .upToDate
+            availableNotes = nil
+            lastChecked = Date()
+            return
+        }
         if AppInfo.isDeveloperBuild {
             // No real update target; reflect the simulation default so the
             // notification UI can be exercised locally.
@@ -193,7 +209,7 @@ final class UpdateService: ObservableObject {
     /// or the panel opens, so a new release surfaces promptly without hammering the
     /// API. The hourly timer is the floor; this makes it feel immediate.
     func checkIfStale(maxAge: TimeInterval = 15 * 60) {
-        if AppInfo.isDeveloperBuild { return }
+        if AppInfo.selfUpdateDisabled { return }
         guard autoCheckEnabled else { return }
         switch state {
         case .checking, .downloading, .installing: return
@@ -206,7 +222,9 @@ final class UpdateService: ObservableObject {
     // MARK: - Download & install
 
     func downloadAndInstall() {
-        if AppInfo.isDeveloperBuild { return }  // never replace the local dev build over itself
+        // Never replace a local build (Developer or this fork's official-named
+        // custom build) with a stock upstream DMG.
+        if AppInfo.selfUpdateDisabled { return }
         guard let downloadURL else { return }
         // Pre-flight BEFORE spending the download: a translocated app or one
         // running from a read-only volume (the mounted DMG) can never be

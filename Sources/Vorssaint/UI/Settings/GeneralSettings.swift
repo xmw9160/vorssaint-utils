@@ -17,6 +17,8 @@ struct GeneralSettings: View {
     @State private var loginPending = false
     @State private var loginRefreshID = UUID()
     @AppStorage(DefaultsKey.hotkeyEnabled) private var hotkeyEnabled = true
+    // Fork customization: the panel's brand mark stays hidden by default.
+    @AppStorage(DefaultsKey.panelShowBrandMark) private var showBrandMark = false
 
     private var text: GeneralSettingsStrings { FeatureStrings.generalSettings(l10n.language) }
     private var appearanceStrings: AppearanceStrings { FeatureStrings.appearance(l10n.language) }
@@ -119,6 +121,15 @@ struct GeneralSettings: View {
                 .padding(.leading, settingsRowTextInset)
             }
 #endif
+            // Fork customization: see docs/定制改动记录.md.
+            Divider()
+            SettingsRow(symbol: "app.badge",
+                        title: PanelBrandMarkStrings.title(l10n.language),
+                        caption: PanelBrandMarkStrings.caption(l10n.language)) {
+                Toggle(PanelBrandMarkStrings.title(l10n.language), isOn: $showBrandMark)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
         }
     }
 

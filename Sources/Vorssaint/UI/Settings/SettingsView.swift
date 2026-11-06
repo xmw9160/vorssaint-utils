@@ -729,7 +729,13 @@ struct AboutSettings: View {
                 aboutContent
             }
 
-            UpdatesView()
+            // Fork customization: a custom build has no update controls,
+            // because installing an upstream DMG would erase the fork.
+            if AppInfo.isCustomBuild {
+                CustomBuildUpdateNotice()
+            } else {
+                UpdatesView()
+            }
         }
         .formStyle(.grouped)
     }

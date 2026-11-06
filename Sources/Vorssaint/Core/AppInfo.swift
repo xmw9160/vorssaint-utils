@@ -25,6 +25,25 @@ enum AppInfo {
         (Bundle.main.bundleIdentifier ?? "").hasSuffix(".dev")
     }
 
+    /// Fork customization (see docs/定制改动记录.md): true for builds produced
+    /// by this fork's build.sh with `VORSSAINT_CUSTOM_BUILD`. They carry the
+    /// official bundle id, so the upstream self-updater would otherwise replace
+    /// them with a stock release and silently drop every customization.
+    /// Test targets compile without the flag, so upstream contracts stay intact.
+    static var isCustomBuild: Bool {
+        #if VORSSAINT_CUSTOM_BUILD
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    /// Neither local variant may download or install an upstream release.
+    static var selfUpdateDisabled: Bool { isDeveloperBuild || isCustomBuild }
+
+    /// Custom builds ship with automatic update checks off by default.
+    static var defaultAutoCheckUpdates: Bool { !isCustomBuild }
+
     /// True when the current version is a pre-release (e.g. 3.3.4-beta.1 or 3.3.4-rc.1).
     static var isBeta: Bool {
         if isDeveloperBuild && UserDefaults.standard.bool(forKey: DefaultsKey.simulateBetaUI) {

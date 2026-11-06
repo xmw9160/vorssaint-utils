@@ -53,7 +53,12 @@ else
     APP_NAME="Vorssaint"
     EXECUTABLE="Vorssaint"
     APP_BUNDLE_ID="com.vorssaint.utils"
-    BUILD_VARIANT_FLAGS=()
+    # Fork customization: official-named builds are still custom builds, so
+    # they must never replace themselves with an upstream release DMG. The
+    # flag only exists in this fork's sources; see docs/定制改动记录.md.
+    # Developer builds keep their own VORSSAINT_DEVELOPMENT flag (and its
+    # simulated-update UI), so they do not need this one.
+    BUILD_VARIANT_FLAGS=(-D VORSSAINT_CUSTOM_BUILD)
     APP_OPTIMIZATION_FLAGS=(-O)
     BUILD_CONFIGURATION="release"
 fi
