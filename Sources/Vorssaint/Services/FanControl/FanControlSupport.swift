@@ -142,6 +142,10 @@ enum FanControlPolicy {
     /// Retained only for the legacy XPC entry point used by older app builds.
     static let coolingDuration: TimeInterval = 15 * 60
     static let heartbeatLimit: TimeInterval = 7
+    /// A request to a daemon that cannot even be spawned may hang with no
+    /// reply and no error callback; past this, send() settles it as failed so
+    /// the caller's failure accounting keeps advancing.
+    static let requestTimeout: TimeInterval = 6
     static let verificationFailureLimit = 3
     static let temperatureFailureLimit = 3
     static let maximumFanCount = 8

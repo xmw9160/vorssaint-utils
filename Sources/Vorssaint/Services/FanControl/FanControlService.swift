@@ -30,6 +30,7 @@ final class FanControlService: ObservableObject {
     private var requestGeneration = 0
     private var tickCount = 0
     private var registrationAttemptedVersion: String?
+    private var handshakeFailureCount = 0
     private var observingWorkspace = false
 
     private static var appService: SMAppService {
@@ -379,8 +380,11 @@ final class FanControlService: ObservableObject {
             guard self.finishRequest(generation) else { return }
             guard let response else {
                 self.error = .helperUnavailable
+                self.handshakeFailureCount += 1
+                self.staleRegistrationRecoveryIfNeeded()
                 return
             }
+            self.handshakeFailureCount = 0
             self.apply(response)
             // Any decoded reply proves that the installed helper speaks this
             // protocol, even when the hardware itself is unsupported.
@@ -401,6 +405,13 @@ final class FanControlService: ObservableObject {
                 finished = true
                 completion(response)
             }
+        }
+        // A daemon that cannot spawn (stale registration) can leave a request
+        // with neither reply nor error callback. The one-shot timeout settles
+        // it as failed; a late fire after a real reply is idempotent here and
+        // rejected by the caller's generation check.
+        DispatchQueue.main.asyncAfter(deadline: .now() + FanControlPolicy.requestTimeout) {
+            finish(nil)
         }
         guard let proxy = proxy(errorHandler: { [weak self] failedConnection in
             DispatchQueue.main.async {
@@ -526,6 +537,44 @@ final class FanControlService: ObservableObject {
             }
         }
         return true
+    }
+
+    /// Fork customization: the daemon reports enabled yet no handshake has
+    /// ever succeeded — the registration belongs to an older signing identity
+    /// (or the stored helper version was lost), so it rejects every request
+    /// and no amount of waiting helps. Only remedy is one unregister/register
+    /// cycle, which returns it to the approval state. Fires only when no
+    /// handshake ever succeeded, no recovery is pending, several consecutive
+    /// requests failed, and this build has not already tried this session;
+    /// the first successful reply stores the helper version and this path is
+    /// never reached again. Restore upstream behavior: remove this method and
+    /// its call in requestStatus.
+    private func staleRegistrationRecoveryIfNeeded() {
+        let installed = UserDefaults.standard.string(forKey: DefaultsKey.fanControlHelperVersion) ?? ""
+        guard installed.isEmpty,
+              !UserDefaults.standard.bool(forKey: DefaultsKey.fanControlRecoveryNeeded),
+              handshakeFailureCount >= 3,
+              registrationAttemptedVersion != Self.helperVersion else { return }
+        registrationAttemptedVersion = Self.helperVersion
+        isWorking = true
+        Self.appService.unregister { error in
+            DispatchQueue.main.async {
+                guard error == nil else {
+                    self.isWorking = false
+                    return
+                }
+                do {
+                    try Self.appService.register()
+                } catch { }
+                self.isWorking = false
+                self.refreshAccessState()
+                if self.accessState == .requiresApproval {
+                    SMAppService.openSystemSettingsLoginItems()
+                } else if self.accessState == .enabled {
+                    self.requestStatus()
+                }
+            }
+        }
     }
 
     private func refreshLocalProbe() {

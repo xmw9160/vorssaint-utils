@@ -2,10 +2,8 @@
 // Copyright (C) 2026 Vorssaint
 
 import Foundation
-#if VORSSAINT_DEVELOPMENT
 import Security
 import CryptoKit
-#endif
 
 enum FanControlIdentifiers {
     static let teamID = "3D485NHW29"
@@ -26,7 +24,7 @@ enum FanControlIdentifiers {
         }
         return "identifier \"\(appBundleID)\" and certificate leaf = H\"\(hash)\""
         #else
-        return "anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\" and identifier \"\(appBundleID)\""
+        return releaseCodeRequirement(identifier: appBundleID)
         #endif
     }
 
@@ -37,12 +35,36 @@ enum FanControlIdentifiers {
         }
         return "identifier \"\(helperID)\" and certificate leaf = H\"\(hash)\""
         #else
-        return "anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\" and identifier \"\(helperID)\""
+        return releaseCodeRequirement(identifier: helperID)
         #endif
     }
 
-    #if VORSSAINT_DEVELOPMENT
-    private static func currentLeafCertificateSHA1() -> String? {
+    // Fork customization: the upstream release rules pin the Apple-issued
+    // chain (anchor apple generic + team ID), which a locally self-signed
+    // build can never satisfy — every XPC handshake between the app and the
+    // daemon is rejected in both directions and Fan Control always reports
+    // the helper as unavailable. When the running process is not signed by
+    // the upstream team certificate, fall back to pinning the leaf
+    // certificate that actually signed this build. The validation target
+    // stays exact (one specific certificate); only "issued by Apple" is
+    // traded for "the very certificate on this build". Ad-hoc binaries have
+    // no certificates at all and keep the impossible upstream rule (fail
+    // closed). Restore upstream behavior: make releaseCodeRequirement
+    // return the anchor-apple-generic string unconditionally.
+    private static func releaseCodeRequirement(identifier: String) -> String {
+        if currentTeamIdentifier() != teamID,
+           let leafHash = currentLeafCertificateSHA1() {
+            return "identifier \"\(identifier)\" and certificate leaf = H\"\(leafHash)\""
+        }
+        return "anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\" and identifier \"\(identifier)\""
+    }
+
+    private static func currentTeamIdentifier() -> String? {
+        guard let info = currentSigningInformation() else { return nil }
+        return info[kSecCodeInfoTeamIdentifier as String] as? String
+    }
+
+    private static func currentSigningInformation() -> [String: Any]? {
         var dynamicCode: SecCode?
         guard SecCodeCopySelf([], &dynamicCode) == errSecSuccess,
               let selfCode = dynamicCode else {
@@ -60,8 +82,12 @@ enum FanControlIdentifiers {
               let info = signingInfo as? [String: Any] else {
             return nil
         }
+        return info
+    }
 
-        guard let certificates = info[kSecCodeInfoCertificates as String] as? [SecCertificate],
+    private static func currentLeafCertificateSHA1() -> String? {
+        guard let info = currentSigningInformation(),
+              let certificates = info[kSecCodeInfoCertificates as String] as? [SecCertificate],
               let leaf = certificates.first else {
             return nil
         }
@@ -70,7 +96,6 @@ enum FanControlIdentifiers {
         let digest = Insecure.SHA1.hash(data: data)
         return digest.map { String(format: "%02x", $0) }.joined()
     }
-    #endif
 }
 
 @objc protocol FanControlXPCProtocol {
