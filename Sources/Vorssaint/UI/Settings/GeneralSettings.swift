@@ -123,10 +123,11 @@ struct GeneralSettings: View {
 #endif
             // Fork customization: see docs/定制改动记录.md.
             Divider()
+            let brandMarkText = PanelBrandMarkStrings.localized(l10n.language)
             SettingsRow(symbol: "app.badge",
-                        title: PanelBrandMarkStrings.title(l10n.language),
-                        caption: PanelBrandMarkStrings.caption(l10n.language)) {
-                Toggle(PanelBrandMarkStrings.title(l10n.language), isOn: $showBrandMark)
+                        title: brandMarkText.title,
+                        caption: brandMarkText.caption) {
+                Toggle(brandMarkText.title, isOn: $showBrandMark)
                     .labelsHidden()
                     .toggleStyle(.switch)
             }
